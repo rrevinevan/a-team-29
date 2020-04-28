@@ -1,28 +1,31 @@
 /**
  * GUI created by Evan Grubis & Andrew Meyers in a-team-29-project
  * 
- * Authors:    Andrew Meyers (ajmeyers4@wisc.edu)
- * 			   Evan Grubis (egrubis@wisc.edu)
+ * Authors: Andrew Meyers (ajmeyers4@wisc.edu) Evan Grubis (egrubis@wisc.edu)
  * 
- * Date:      04/20/20
+ * Date: 04/20/20
  *
- * Course:	  CS 400
- * Semester:  Spring 2020
- * Lecture:   002
+ * Course: CS 400 Semester: Spring 2020 Lecture: 002
  *
- * IDE:       Eclipse IDE for Java Developers
- * OS:        Windows 10 Home
+ * IDE: Eclipse IDE for Java Developers OS: Windows 10 Home
  */
 
 package application;
 
+import java.io.File;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import javafx.application.Application;
+import javafx.collections.ObservableList;
 import javafx.geometry.Pos;
+import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.chart.BarChart;
 import javafx.scene.chart.CategoryAxis;
 import javafx.scene.chart.NumberAxis;
+import javafx.scene.chart.XYChart;
+import javafx.scene.chart.XYChart.Series;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
@@ -33,6 +36,9 @@ import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontPosture;
+import javafx.stage.DirectoryChooser;
+import javafx.stage.FileChooser;
+import javafx.stage.FileChooser.ExtensionFilter;
 import javafx.stage.Stage;
 
 /**
@@ -48,18 +54,30 @@ public class GUI extends Application {
 	// NOTE: this.getParameters().getRaw() will get these also
 	private List<String> args;
 
+	// creates the handler object that is the mediator between the GUI and the data
+	// structure
+	private Handler h;
+
 	private static final int WINDOW_WIDTH = 1000;
 	private static final int WINDOW_HEIGHT = 600;
 	private static final String APP_TITLE = "Farming Logistics 9000";
+	private static final Font ITALIC_FONT = Font.font("Serif", FontPosture.ITALIC, Font.getDefault().getSize());
 
 	/**
 	 * This method is used to start the JavaFX Application
 	 * 
 	 * @param primaryStage - The primary stage to be used for this GUI
 	 */
+	@SuppressWarnings("unchecked")
 	@Override
 	public void start(Stage primaryStage) throws Exception {
-		final Font ITALIC_FONT = Font.font("Serif", FontPosture.ITALIC, Font.getDefault().getSize());
+		// initializes handler
+		h = new Handler();
+
+		// Create error label
+		Label errorLabel = new Label("No Errors");
+		errorLabel.setFont(ITALIC_FONT);
+
 		// save args example
 		args = this.getParameters().getRaw();
 		int rt = 0;
@@ -71,11 +89,37 @@ public class GUI extends Application {
 		Button in = new Button("Import");
 		Button out = new Button("Export");
 
+		// Button for updating graph
+		Button updateButt = new Button("Update Graph");
+
+		// Implements importing of data
+		in.setOnAction(value -> {
+			try {
+				DirectoryChooser dc = new DirectoryChooser();
+				File selectedDirectory = dc.showDialog(primaryStage);
+				h.importFile(selectedDirectory);
+				errorLabel.setText("No Errors");
+				errorLabel.setTextFill(Color.web("00FF00"));
+			} catch (NullPointerException e) {
+				// Happens when the DirectoryChooser is exited without selecting a file and
+				// can be ignored
+			} catch (Exception e) {
+
+				// Updates error label when there is an error importing
+				errorLabel.setText("There was an error while importing a file");
+				errorLabel.setTextFill(Color.web("990000"));
+			}
+		});
+
 		// Creates an HBox for the input and output buttons
 		HBox inOut = new HBox();
 		inOut.getChildren().add(in);
 		inOut.getChildren().add(new Label("     "));
 		inOut.getChildren().add(out);
+
+		// Creates an HBox for statistics
+		HBox stats = new HBox();
+		stats.getChildren().add(new Label("Statistics:     "));
 
 		// Sets up comboBox for report types that will determine graph type
 		ComboBox<String> reportType = new ComboBox<String>();
@@ -88,44 +132,82 @@ public class GUI extends Application {
 		// Initializes the comboBoxes for each report type
 		ComboBox<String> yearCombo = new ComboBox<String>();
 		yearCombo.setPromptText("Choose Year");
-
 		ComboBox<String> monthCombo = new ComboBox<String>();
 		monthCombo.setPromptText("Choose Month");
-
 		ComboBox<String> dayCombo = new ComboBox<String>();
 		dayCombo.setPromptText("Choose Day");
-
 		ComboBox<String> farmCombo = new ComboBox<String>();
 		farmCombo.setPromptText("Choose Farm");
-
 		ComboBox<String> yearCombo2 = new ComboBox<String>();
 		yearCombo2.setPromptText("Choose end Year");
-
 		ComboBox<String> monthCombo2 = new ComboBox<String>();
 		monthCombo2.setPromptText("Choose end Month");
-
 		ComboBox<String> dayCombo2 = new ComboBox<String>();
 		dayCombo2.setPromptText("Choose end Day");
 
 		Label space = new Label(" ");
 
-		// Initializes a comboBox for
+		// Initializes comboBoxes for sorting settings
 		ComboBox<String> orderCombo = new ComboBox<String>();
-		orderCombo.setPromptText("Choose sorting method");
+		orderCombo.setPromptText("Sorting Order");
 		orderCombo.getItems().add("Farm ID");
-		orderCombo.getItems().add("Weight ascending");
-		orderCombo.getItems().add("Weight decending");
+		orderCombo.getItems().add("Weight Ascending");
+		orderCombo.getItems().add("Weight Decending");
+
+		// Initializes ComboBox for the y axis type
+		ComboBox<String> yAxisCombo = new ComboBox<String>();
+		yAxisCombo.setPromptText("Y-Axis Options");
+		yAxisCombo.getItems().add("Weight");
+		yAxisCombo.getItems().add("Percent");
 
 		// Creates a new vBox for the left side of the GUI
-		VBox vbox = new VBox(10, new Label("Data File Controls"), inOut, new Label(" "), reportType, new Label(" "));
+		VBox vbox = new VBox(10, new Label("Data File Controls:"), inOut, new Label(" "), new Label("Graph Controls:"),
+				updateButt, new Label(" "), reportType, new Label(" "));
+		vbox.setTranslateX(5);
 
 		// Creates the axes and title for the bar chart
 		CategoryAxis xAxis = new CategoryAxis();
 		NumberAxis yAxis = new NumberAxis();
+		yAxis.setLabel(" ");
 		Label chartTitle = new Label("");
 
 		// Make bar chart
 		BarChart<CategoryAxis, NumberAxis> chart = new BarChart(xAxis, yAxis);
+		chart.setAnimated(false);
+		chart.setLegendVisible(false);
+
+		// Adds months to monthComboBoxes
+		monthCombo.getItems().add("January");
+		monthCombo.getItems().add("February");
+		monthCombo.getItems().add("March");
+		monthCombo.getItems().add("April");
+		monthCombo.getItems().add("May");
+		monthCombo.getItems().add("June");
+		monthCombo.getItems().add("July");
+		monthCombo.getItems().add("August");
+		monthCombo.getItems().add("September");
+		monthCombo.getItems().add("October");
+		monthCombo.getItems().add("November");
+		monthCombo.getItems().add("December");
+
+		monthCombo2.getItems().add("January");
+		monthCombo2.getItems().add("February");
+		monthCombo2.getItems().add("March");
+		monthCombo2.getItems().add("April");
+		monthCombo2.getItems().add("May");
+		monthCombo2.getItems().add("June");
+		monthCombo2.getItems().add("July");
+		monthCombo2.getItems().add("August");
+		monthCombo2.getItems().add("September");
+		monthCombo2.getItems().add("October");
+		monthCombo2.getItems().add("November");
+		monthCombo2.getItems().add("December");
+
+		// Adds all days to day comboBoxes
+		for (int i = 1; i < 32; i++) {
+			dayCombo.getItems().add(Integer.toString(i));
+			dayCombo2.getItems().add(Integer.toString(i));
+		}
 
 		// Shows different comboBoxes depending on what report type is selected
 		reportType.setOnAction(value -> {
@@ -143,25 +225,54 @@ public class GUI extends Application {
 				vbox.getChildren().remove(dayCombo2);
 				vbox.getChildren().remove(space);
 				vbox.getChildren().remove(orderCombo);
-
-				// Add all years to the year comboBox
-				// Add all farms to the farm comboBox
-
-				// Displays year and farm combo boxes
-				vbox.getChildren().add(yearCombo);
-				vbox.getChildren().add(farmCombo);
+				vbox.getChildren().remove(yAxisCombo);
 
 				// Clear options in year and farm comboBoxes
 				yearCombo.getItems().clear();
 				farmCombo.getItems().clear();
+				yearCombo.setPromptText("Year");
+				farmCombo.setPromptText("Farm ID");
+				yAxisCombo.setPromptText("y-Axis");
+
+				// Add all years to the year comboBox
+				ArrayList<Year> years = h.getYears();
+				for (int i = 0; i < years.size(); i++) {
+					yearCombo.getItems().add(Integer.toString((years.get(i).year)));
+				}
+
+				// Add all FarmIDs to farmID comboBox
+				yearCombo.setOnAction(v -> {
+					if (reportType.getValue() != null) {
+						if (reportType.getValue().contentEquals("Farm Report")) {
+							farmCombo.getItems().clear();
+
+							ArrayList<Integer> farmIDList = h.getAllFarmIDs(Integer.parseInt(yearCombo.getValue()));
+
+							// Sets values in farmCombo
+							for (int i = 0; i < farmIDList.size(); i++) {
+								farmCombo.getItems().add("Farm " + Integer.toString(farmIDList.get(i)));
+							}
+						}
+					}
+				});
+
+				// Displays year, farm, and yAxis combo boxes
+				vbox.getChildren().add(yearCombo);
+				vbox.getChildren().add(farmCombo);
+				vbox.getChildren().add(space);
+				vbox.getChildren().add(yAxisCombo);
 
 				// Sets axes names
 				xAxis.setLabel("Month");
-				yAxis.setLabel("Weight");
 				chartTitle.setText("Report for farm [id] for [year]");
 
-				// adds data to the graph
+				// Adds statistics
+				// /////////////////////////////////////////////////////////////////////////////////////
 
+				// sets color of graph
+				for (Node n : chart.lookupAll(".default-color0.chart-bar")) {
+					n.setStyle("-fx-bar-fill: blue;");
+				}
 			}
 			// Annual Report selected
 			else if (reportType.getValue() != null && ((String) reportType.getValue()).equals("Annual Report")) {
@@ -176,22 +287,33 @@ public class GUI extends Application {
 				vbox.getChildren().remove(dayCombo2);
 				vbox.getChildren().remove(space);
 				vbox.getChildren().remove(orderCombo);
+				vbox.getChildren().remove(yAxisCombo);
+
+				// Clear comboBoxes that will be used
+				yearCombo.getItems().clear();
+				yearCombo.setPromptText("Year");
+				orderCombo.setPromptText("Sorting Order");
+				yAxisCombo.setPromptText("y-Axis");
 
 				// Add all years to the year comboBox
+				ArrayList<Year> years = h.getYears();
+				for (int i = 0; i < years.size(); i++) {
+					yearCombo.getItems().add(Integer.toString((years.get(i).year)));
+				}
 
-				// Displays year and order comboBoxes
+				// Displays year, order, and yAxis comboBoxes
 				vbox.getChildren().add(yearCombo);
 				vbox.getChildren().add(space);
 				vbox.getChildren().add(orderCombo);
-
-				// Clears out year comboBox
-				yearCombo.getItems().clear();
+				vbox.getChildren().add(yAxisCombo);
 
 				// Sets axes names
 				xAxis.setLabel("Farm ID");
-				yAxis.setLabel("Weight / Percent");
 				chartTitle.setText("Report for all farms for [year]");
 
+				// sets color of graph
+				for (Node n : chart.lookupAll(".default-color0.chart-bar"))
+					n.setStyle("-fx-bar-fill: orange;");
 			}
 			// Monthly Report Selected
 			else if (reportType.getValue() != null && ((String) reportType.getValue()).equals("Monthly Report")) {
@@ -206,24 +328,34 @@ public class GUI extends Application {
 				vbox.getChildren().remove(dayCombo2);
 				vbox.getChildren().remove(space);
 				vbox.getChildren().remove(orderCombo);
+				vbox.getChildren().remove(yAxisCombo);
 
-				// Add all years and months to comboBoxes
+				// Clear necessary comboBoxes that will be used
+				yearCombo.getItems().clear();
+				yearCombo.setPromptText("Year");
+				yAxisCombo.setPromptText("y-Axis");
+				orderCombo.setPromptText("Sorting Order");
 
-				// Displays year, month, and order comboBoxes
+				// Add all years to the year comboBox
+				ArrayList<Year> years = h.getYears();
+				for (int i = 0; i < years.size(); i++) {
+					yearCombo.getItems().add(Integer.toString((years.get(i).year)));
+				}
+
+				// Displays year, month, order, and yAxis comboBoxes
 				vbox.getChildren().add(yearCombo);
 				vbox.getChildren().add(monthCombo);
 				vbox.getChildren().add(space);
 				vbox.getChildren().add(orderCombo);
-
-				// Clears out year and month comboBoxes
-				yearCombo.getItems().clear();
-				monthCombo.getItems().clear();
+				vbox.getChildren().add(yAxisCombo);
 
 				// Sets axes names
 				xAxis.setLabel("Farm ID");
-				yAxis.setLabel("Weight / Percent");
 				chartTitle.setText("Report for [month], [year] for all farms");
 
+				// sets color of graph
+				for (Node n : chart.lookupAll(".default-color0.chart-bar"))
+					n.setStyle("-fx-bar-fill: green;");
 			}
 			// Date Range Report Selected
 			else if (reportType.getValue() != null && ((String) reportType.getValue()).equals("Date Range Report")) {
@@ -238,8 +370,22 @@ public class GUI extends Application {
 				vbox.getChildren().remove(dayCombo2);
 				vbox.getChildren().remove(space);
 				vbox.getChildren().remove(orderCombo);
+				vbox.getChildren().remove(yAxisCombo);
 
-				// Add all years, months, & days to date combo boxes
+				// Clears out necessary date comboBoxes
+				yearCombo.getItems().clear();
+				yearCombo2.getItems().clear();
+				yearCombo.setPromptText("Year");
+				yearCombo2.setPromptText("Year2");
+				yAxisCombo.setPromptText("y-Axis");
+				orderCombo.setPromptText("Sorting Order");
+
+				// Add all years to years comboBoxes
+				ArrayList<Year> years = h.getYears();
+				for (int i = 0; i < years.size(); i++) {
+					yearCombo.getItems().add(Integer.toString((years.get(i).year)));
+					yearCombo2.getItems().add(Integer.toString((years.get(i).year)));
+				}
 
 				// Displays date and order comboBoxes
 				vbox.getChildren().add(yearCombo);
@@ -250,30 +396,191 @@ public class GUI extends Application {
 				vbox.getChildren().add(dayCombo2);
 				vbox.getChildren().add(space);
 				vbox.getChildren().add(orderCombo);
-
-				// Clears out date comboBoxes
-				yearCombo.getItems().clear();
-				monthCombo.getItems().clear();
-				dayCombo.getItems().clear();
-				yearCombo2.getItems().clear();
-				monthCombo2.getItems().clear();
-				dayCombo2.getItems().clear();
+				vbox.getChildren().add(yAxisCombo);
 
 				// Sets axes names
 				xAxis.setLabel("Farm ID");
-				yAxis.setLabel("Weight / Percent");
 				chartTitle.setText("Report for [month]/[day]/[year] to [month2]/[day2]/[year2] for all farms");
+
+				// sets color of graph
+				for (Node n : chart.lookupAll(".default-color0.chart-bar"))
+					n.setStyle("-fx-bar-fill: red;");
 			}
 		});
 
+		// Pick y axis label
+		yAxisCombo.setOnAction(value -> {
+			if (yAxisCombo.getValue() != null && ((String) yAxisCombo.getValue()).equals("Weight"))
+				yAxis.setLabel("Weight");
+			else
+				yAxis.setLabel("Percentage");
+		});
+
+		// Adds a button
 		// Sets left side of the border pane to the vBox
 		bp.setLeft(vbox);
 
 		// Creates vbox for the center
-		VBox centerVbox = new VBox(chartTitle, chart);
+		VBox centerVbox = new VBox(chartTitle, chart, stats);
 		bp.setCenter(centerVbox);
 
-		// Setting up bottom
+		// ADDING DATA TO THE GRAPH
+		updateButt.setOnAction(value -> {
+			if (reportType.getValue() != null) {
+
+				// Farm Report
+				if (reportType.getValue().equals("Farm Report")) {
+					if (yearCombo.getValue() != null && farmCombo.getValue() != null && yAxisCombo.getValue() != null) {
+
+						chart.getData().clear();
+						XYChart.Series dataSeries1 = new XYChart.Series();
+
+						// y = weight
+						if (yAxisCombo.getValue().equals("Weight")) {
+
+							// Iterates through all the months
+							for (int i = 1; i < 13; i++) {
+								int totWeightOfFarmInMonth = h.getTotalWeightOfFarmInMonth(farmCombo.getValue(), i,
+										Integer.parseInt(yearCombo.getValue()));
+
+								dataSeries1.getData()
+										.add(new XYChart.Data(Integer.toString(i), totWeightOfFarmInMonth));
+							}
+						}
+						// y = percentage
+						else {
+							double allFarmsTotalWeight = 0;
+							double farmWeight = 0;
+
+							// Iterates through all of the months
+							for (int i = 1; i < 13; i++) {
+
+								allFarmsTotalWeight = (double) h.getTotalWeightOfAllFarmsInMonth(i,
+										Integer.parseInt(yearCombo.getValue()));
+
+								farmWeight = (double) h.getTotalWeightOfFarmInMonth(farmCombo.getValue(), i,
+										Integer.parseInt(yearCombo.getValue()));
+
+								double weightPercent = (farmWeight / allFarmsTotalWeight) * 100.0;
+								weightPercent = Math.round(weightPercent * 100.0) / 100.0;
+
+								dataSeries1.getData().add(new XYChart.Data(Integer.toString(i), weightPercent));
+							}
+						}
+
+						// Updates the chart
+						chart.getData().add(dataSeries1);
+
+						// Sets axes names
+						chartTitle.setText("Report on " + farmCombo.getValue() + " for " + yearCombo.getValue());
+					}
+					// Updates error message when fields not properly filled in
+					else {
+						errorLabel.setTextFill(Color.web("990000"));
+						errorLabel.setText("Ensure that all graph options are selected correctly");
+					}
+				}
+
+				// Annual Report
+				if (reportType.getValue().equals("Annual Report")) {
+					if (yearCombo.getValue() != null && orderCombo.getValue() != null
+							&& yAxisCombo.getValue() != null) {
+
+						ArrayList<Integer> allFarms = h.getAllFarmIDs(Integer.parseInt(yearCombo.getValue()));
+						String farmUsage = "Farm ";
+
+						chart.getData().clear();
+						XYChart.Series dataSeries2 = new XYChart.Series();
+
+						// x-axis is Farm ID
+
+						// y axis is weight
+						if (yAxisCombo.getValue().equals("Weight")) {
+
+							// Iterates through all of the farms and adds their annual weight to the
+							// dataSeries
+							for (int i = 0; i < allFarms.size(); i++) {
+								dataSeries2.getData()
+										.add(new XYChart.Data(Integer.toString(allFarms.get(i)), h.getTotalWeightOfFarmInYear(
+												(farmUsage + allFarms.get(i)), Integer.parseInt(yearCombo.getValue()))));
+							}
+						}
+						// y axis is percentage
+						else {
+							double totAllFarms = (double) h.getTotalWeightOfAllFarmsInYear(Integer.parseInt(yearCombo.getValue()));
+							
+							// Iterates through all of the farms to get their annualWeight
+							for (int i = 0; i < allFarms.size(); i++) {
+								double singleFarmTot = (double) h.getTotalWeightOfFarmInYear((farmUsage + allFarms.get(i)), Integer.parseInt(yearCombo.getValue()));
+								
+								double weightPercent = (singleFarmTot / totAllFarms) * 100.0;
+								weightPercent = Math.round(weightPercent * 100.0) / 100.0;
+								
+								dataSeries2.getData()
+										.add(new XYChart.Data(Integer.toString(allFarms.get(i)), weightPercent));
+							}
+						}
+
+						// x-axis is Farm ascending   --- cant figuire out how to sort the data once it is in dataSeries2
+						if (orderCombo.getValue().equals("Weight Ascending")) {
+							//ObservableList<String> list = xAxis.getCategories();
+							//Comparator<String> byValue = (e1, e2) -> Integer.compare(Integer.parseInt(e1), Integer.parseInt(e2));
+							//list.sort(byValue);
+							//xAxis.setCategories(list);
+						}
+
+						// x-axis is Farm ID descending  --- same as above, just opposite
+						if (orderCombo.getValue().equals("Weiight Decending")) {
+							
+						}
+						
+						// Updates the chart
+						chart.getData().add(dataSeries2);
+
+						// Sets axes names
+						chartTitle.setText("Report for all farms in " + yearCombo.getValue());
+					}
+					// Updates error message when fields not properly filled in
+					else {
+						errorLabel.setTextFill(Color.web("990000"));
+						errorLabel.setText("Ensure that all graph options are selected correctly");
+					}
+				}
+
+				// Monthly Report
+				if (reportType.getValue().equals("Monthly Report")) {
+					if (yearCombo.getValue() != null && farmCombo.getValue() != null && yAxisCombo.getValue() != null) {
+						chart.getData().clear();
+					}
+					// Updates error message when fields not properly filled in
+					else {
+						errorLabel.setTextFill(Color.web("990000"));
+						errorLabel.setText("Ensure that all graph options are selected correctly");
+					}
+				}
+
+				// Date Range Report
+				if (reportType.getValue().equals("Date Range Report")) {
+					if (yearCombo.getValue() != null && monthCombo.getValue() != null && dayCombo.getValue() != null
+							&& yearCombo2.getValue() != null && monthCombo2.getValue() != null
+							&& dayCombo2.getValue() != null && orderCombo.getValue() != null
+							&& yAxisCombo.getValue() != null) {
+						
+						chart.getData().clear();
+					}
+					// Updates error message when fields not properly filled in
+					else {
+						errorLabel.setTextFill(Color.web("990000"));
+						errorLabel.setText("Ensure that all graph options are selected correctly");
+					}
+				}
+			} else {
+				errorLabel.setTextFill(Color.web("990000"));
+				errorLabel.setText("Ensure that a report type is selected");
+			}
+		});
+
+		// SETTING UP BOTTOM for editing data
 		// Instantiates combo boxes for input to edit data that are stored in a HBox
 		HBox editDataInput = new HBox();
 
@@ -288,7 +595,7 @@ public class GUI extends Application {
 		bottomDayCombo.setPromptText("Day");
 		ComboBox<String> bottomWeightCombo = new ComboBox<String>();
 		bottomWeightCombo.setPromptText("Milk Weight");
-		
+
 		// Adds combo boxes to the editDataInput hbox
 		editDataInput.getChildren().add(bottomFarmIDCombo);
 		editDataInput.getChildren().add(new Label("     "));
@@ -312,12 +619,7 @@ public class GUI extends Application {
 		// Makes another HBox to handle text input from the user used for removing data
 		HBox currentEditHbox = new HBox(new Label("Current:   "), currentTextField, new Label("   "), deleteButton);
 
-		// Create error label
-		Label errorLabel = new Label("No Errors");
-		errorLabel.setFont(ITALIC_FONT);
-
 		// Set error label
-		// errorLabel.setText("");
 		if (errorLabel.getText().equals("No Errors"))
 			errorLabel.setTextFill(Color.web("009900"));
 		else
