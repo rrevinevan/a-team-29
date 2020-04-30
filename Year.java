@@ -46,7 +46,23 @@ public class Year {
    * @param weight - the weight of the Data to be added
    */
   public void addData(int month, int day, String farmID, int weight) {
-    months[month - 1].add(new FarmData(day, farmID, weight));
+    boolean trigger = false;
+    for (FarmData d : months[month - 1]) {
+      if (d.getDay() == day && d.getFarmID().equals(farmID)) {
+        d.setWeight(weight);
+        trigger = true;
+      }
+    }
+    if (!trigger)
+      months[month - 1].add(new FarmData(day, farmID, weight));
+  }
+
+  public int getWeight(int month, int day, String farmID) {
+    int returnme = 0;
+    for (FarmData d : months[month - 1])
+      if (d.getFarmID().equals(farmID) && d.getDay() == day)
+        return d.getWeight();
+    return returnme;
   }
 
   /**
