@@ -21,7 +21,7 @@ public class FarmData {
   String farmID;
 
   /**
-   * Constructs a new instance of Data
+   * Constructs a new instance of FarmData
    * 
    * @param day    - the day of the Data entry
    * @param farmID - the farmID of the farm being represented in the Data entry
